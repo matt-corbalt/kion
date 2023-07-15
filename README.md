@@ -90,7 +90,7 @@ cloud-access-role: my-role
 ```
 
 Then the `credentials` and `console` commands can be reduced to:
- 
+
 ```
 $ cd /path/to/workspace
 
@@ -171,6 +171,66 @@ To remove credentials from the system keychain:
 
 ```
 $ kion logout
+```
+
+## Firefox Containers
+
+The Kion tool supports opening an authenticated AWS console (same as the `console` command), but in
+a specific Firefox container.
+
+This has a few prerequisites:
+
+1. You must have the `firefox` binary installed and in your `$PATH`
+2. You need to have the following Firefox addons installed:
+    * [Firefox Multi-Account Containers](https://addons.mozilla.org/en-US/firefox/addon/multi-account-containers/)
+        * this is an official Mozilla addon
+    * [Open external links in a container](https://addons.mozilla.org/en-US/firefox/addon/open-url-in-container/)
+        * this is a community built open-source addon
+        * https://github.com/honsiorovskyi/open-url-in-container/tree/1.0.3
+        * note: the plugin available on the Firefox addon is the v1.0.3 version, the `master` branch
+          contains an unreleased version
+
+### Customization
+
+The opened container name and color are customizable. The container name will be matched to an
+existing container. If the container does not already exist, a new one with the specified color and
+name will be created. The color parameter will be ignored if a container already exists.
+
+**Methods of customization:**
+(in order or precedence)
+1. The `--container-name` and `--container-color` CLI arguments
+2. The Kion tool configuration file
+    * The config file is written to `~/.config/kion/config.yml`
+    * Example:
+      ```
+      $ cat ~/.config/kion/config.yml
+
+      firefox-containers:
+        123412341234:
+          name: my special account
+          color: purple
+        234123412341:
+          name: production account
+          color: red
+      ```
+3. If not otherwise specified, the defaults are:
+    * `container-name`: the account ID
+    * `container-color`: random color (the same account ID will produce the same color)
+
+The container colors are limited to blue, turquoise, green, yellow, orange, red, pink, purple. This
+is a limitation of the [Firefox Multi-Account
+Containers](https://addons.mozilla.org/en-US/firefox/addon/multi-account-containers/) addon.
+
+### Usage
+
+```
+### Opens the AWS console in a Firefox container named `123412341234`
+$ kion firefox --account-id 123412341234 --cloud-access-role my-role
+```
+
+```
+### Opens the AWS console in a purple Firefox container named `my special container`
+$ kion firefox --account-id 234123412341 --cloud-access-role my-role --container-name "my special container" --container-color purple
 ```
 
 ## Scenario: Terraform

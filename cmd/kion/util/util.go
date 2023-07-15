@@ -1,7 +1,11 @@
 package util
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/corbaltcode/kion/cmd/kion/config"
@@ -69,4 +73,41 @@ func NewClient(cfg *config.Config, keyCfg *config.KeyConfig) (*client.Client, er
 
 func KeyringService(host string, idms int) string {
 	return fmt.Sprintf("%s/%d", host, idms)
+}
+
+func GetAWSSigninToken(accessKeyID string, secretAccessKey string, sessionToken string) (string, error) {
+	session := map[string]string{
+		"sessionId":    accessKeyID,
+		"sessionKey":   secretAccessKey,
+		"sessionToken": sessionToken,
+	}
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		return "", err
+	}
+
+	v := url.Values{}
+	v.Add("Action", "getSigninToken")
+	v.Add("Session", string(sessionJSON))
+	url := "https://signin.aws.amazon.com/federation?" + v.Encode()
+
+	resp, err := http.DefaultClient.Get(url)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", errors.New(resp.Status)
+	}
+
+	out := struct {
+		SigninToken string
+	}{}
+
+	defer resp.Body.Close()
+	err = json.NewDecoder(resp.Body).Decode(&out)
+	if err != nil {
+		return "", err
+	}
+
+	return out.SigninToken, nil
 }
