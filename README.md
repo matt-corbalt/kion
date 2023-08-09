@@ -176,12 +176,17 @@ $ kion logout
 ## Firefox Containers
 
 The Kion tool supports opening an authenticated AWS console (same as the `console` command), but in
-a specific Firefox container.
+a specific Firefox container. Each account will open in a separate Firefox container.
 
-This has a few prerequisites:
+[Firefox containers](https://addons.mozilla.org/en-US/firefox/addon/multi-account-containers/) allow
+per-tab isolation of cookies. This allows you to be signed into more than one AWS account
+simultaneously.
 
-1. You must have the `firefox` binary installed and in your `$PATH`
-2. You need to have the following Firefox addons installed:
+### Setup
+
+1. Add the `firefox` binary to your `$PATH`
+  * when you open a new shell session, you should be able to execute the `firefox` command
+2. Install the following Firefox addons:
     * [Firefox Multi-Account Containers](https://addons.mozilla.org/en-US/firefox/addon/multi-account-containers/)
         * this is an official Mozilla addon
     * [Open external links in a container](https://addons.mozilla.org/en-US/firefox/addon/open-url-in-container/)
