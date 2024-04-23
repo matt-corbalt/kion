@@ -26,6 +26,7 @@ func New(cfg *config.Config, keyCfg *config.KeyConfig) *cobra.Command {
 	cmd.Flags().StringP("cloud-access-role", "", "", "cloud access role")
 	cmd.Flags().BoolP("print", "p", false, "print URL instead of opening a browser")
 	cmd.Flags().StringP("region", "", "", "AWS region")
+	cmd.Flags().StringP("govcloud-region", "", "", "AWS GovCloud region")
 	cmd.Flags().StringP("session-duration", "", "1h", "duration of temporary credentials")
 
 	// container customizability
@@ -49,7 +50,12 @@ func run(cfg *config.Config, keyCfg *config.KeyConfig) error {
 	if err != nil {
 		return err
 	}
-	region, err := cfg.StringErr("region")
+	commercialRegion, err := cfg.StringErr("region")
+	if err != nil {
+		return err
+	}
+
+	govCloudRegion, err := cfg.StringErr("govcloud-region")
 	if err != nil {
 		return err
 	}
@@ -59,12 +65,27 @@ func run(cfg *config.Config, keyCfg *config.KeyConfig) error {
 		return err
 	}
 
+	accountInfo, err := kion.GetAccountByID(accountID)
+	if err != nil {
+		return err
+	}
+
+	awsEndpoint, region := "", ""
+	// Account types: 1=commercial, 2=govcloud
+	if accountInfo.AccountTypeID == 2 {
+		region = govCloudRegion
+		awsEndpoint = "amazonaws-us-gov.com"
+	} else {
+		region = commercialRegion
+		awsEndpoint = "aws.amazon.com"
+	}
+
 	creds, err := kion.GetTemporaryCredentialsByCloudAccessRole(accountID, cloudAccessRole)
 	if err != nil {
 		return err
 	}
 
-	signinToken, err := util.GetAWSSigninToken(creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken)
+	signinToken, err := util.GetAWSSigninToken(awsEndpoint, creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken)
 	if err != nil {
 		return err
 	}
@@ -72,9 +93,9 @@ func run(cfg *config.Config, keyCfg *config.KeyConfig) error {
 	v := url.Values{}
 	v.Add("Action", "login")
 	v.Add("Issuer", fmt.Sprintf("https://%s/login", host))
-	v.Add("Destination", fmt.Sprintf("https://%s.console.aws.amazon.com", region))
+	v.Add("Destination", fmt.Sprintf("https://%s.console.%s", region, awsEndpoint))
 	v.Add("SigninToken", signinToken)
-	signinUrl := "https://signin.aws.amazon.com/federation?" + v.Encode()
+	signinUrl := fmt.Sprintf("https://signin.%s/federation?", awsEndpoint) + v.Encode()
 
 	firefoxContainerUrl, err := buildFirefoxContainerUrl(cfg, signinUrl, accountID)
 	if err != nil {

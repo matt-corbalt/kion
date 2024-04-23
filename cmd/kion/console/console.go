@@ -2,11 +2,8 @@ package console
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"html/template"
-	"net/http"
 	"net/url"
 
 	"github.com/corbaltcode/kion/cmd/kion/config"
@@ -29,7 +26,8 @@ func New(cfg *config.Config, keyCfg *config.KeyConfig) *cobra.Command {
 	cmd.Flags().StringP("cloud-access-role", "", "", "cloud access role")
 	cmd.Flags().BoolP("print", "p", false, "print URL instead of opening a browser")
 	cmd.Flags().BoolP("logout", "", false, "log out of existing AWS console session")
-	cmd.Flags().StringP("region", "", "", "AWS region")
+	cmd.Flags().StringP("region", "", "", "AWS Commercial region")
+	cmd.Flags().StringP("govcloud-region", "", "", "AWS GovCloud region")
 	cmd.Flags().StringP("session-duration", "", "1h", "duration of temporary credentials")
 
 	return cmd
@@ -49,7 +47,12 @@ func run(cfg *config.Config, keyCfg *config.KeyConfig) error {
 	if err != nil {
 		return err
 	}
-	region, err := cfg.StringErr("region")
+	commercialRegion, err := cfg.StringErr("region")
+	if err != nil {
+		return err
+	}
+
+	govcloudRegion, err := cfg.StringErr("govcloud-region")
 	if err != nil {
 		return err
 	}
@@ -58,12 +61,28 @@ func run(cfg *config.Config, keyCfg *config.KeyConfig) error {
 	if err != nil {
 		return err
 	}
+
+	accountInfo, err := kion.GetAccountByID(accountID)
+	if err != nil {
+		return err
+	}
+
+	awsEndpoint, region := "", ""
+	// Account types: 1=commercial, 2=govcloud
+	if accountInfo.AccountTypeID == 2 {
+		region = govcloudRegion
+		awsEndpoint = "amazonaws-us-gov.com"
+	} else {
+		region = commercialRegion
+		awsEndpoint = "aws.amazon.com"
+	}
+
 	creds, err := kion.GetTemporaryCredentialsByCloudAccessRole(accountID, cloudAccessRole)
 	if err != nil {
 		return err
 	}
 
-	signinToken, err := getAWSSigninToken(creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken)
+	signinToken, err := util.GetAWSSigninToken(awsEndpoint, creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken)
 	if err != nil {
 		return err
 	}
@@ -71,9 +90,9 @@ func run(cfg *config.Config, keyCfg *config.KeyConfig) error {
 	v := url.Values{}
 	v.Add("Action", "login")
 	v.Add("Issuer", fmt.Sprintf("https://%s/login", host))
-	v.Add("Destination", fmt.Sprintf("https://%s.console.aws.amazon.com", region))
+	v.Add("Destination", fmt.Sprintf("https://%s.console.%s", region, awsEndpoint))
 	v.Add("SigninToken", signinToken)
-	signinUrl := "https://signin.aws.amazon.com/federation?" + v.Encode()
+	signinUrl := fmt.Sprintf("https://signin.%s/federation?", awsEndpoint) + v.Encode()
 
 	if cfg.Bool("print") {
 		fmt.Println(signinUrl)
@@ -95,43 +114,6 @@ func run(cfg *config.Config, keyCfg *config.KeyConfig) error {
 	}
 
 	return nil
-}
-
-func getAWSSigninToken(accessKeyID string, secretAccessKey string, sessionToken string) (string, error) {
-	session := map[string]string{
-		"sessionId":    accessKeyID,
-		"sessionKey":   secretAccessKey,
-		"sessionToken": sessionToken,
-	}
-	sessionJSON, err := json.Marshal(session)
-	if err != nil {
-		return "", err
-	}
-
-	v := url.Values{}
-	v.Add("Action", "getSigninToken")
-	v.Add("Session", string(sessionJSON))
-	url := "https://signin.aws.amazon.com/federation?" + v.Encode()
-
-	resp, err := http.DefaultClient.Get(url)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", errors.New(resp.Status)
-	}
-
-	out := struct {
-		SigninToken string
-	}{}
-
-	defer resp.Body.Close()
-	err = json.NewDecoder(resp.Body).Decode(&out)
-	if err != nil {
-		return "", err
-	}
-
-	return out.SigninToken, nil
 }
 
 var logoutHtmlTemplate = template.Must(template.New("logout").Parse(`

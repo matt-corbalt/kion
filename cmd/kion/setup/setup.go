@@ -194,11 +194,22 @@ func run() error {
 		return err
 	}
 
+	var govcloudRegion string
+	err = survey.AskOne(
+		&survey.Input{Message: "Default region (GovCloud):", Default: "us-gov-west-1"},
+		&govcloudRegion,
+		survey.WithValidator(survey.Required),
+	)
+	if err != nil {
+		return err
+	}
+
 	settings := map[string]interface{}{
 		"app-api-key-duration": appAPIKeyDuration,
 		"host":                 host,
 		"idms":                 idms.ID,
 		"region":               region,
+		"govcloud-region":      govcloudRegion,
 		"rotate-app-api-keys":  rotateAppAPIKeys,
 		"session-duration":     sessionDuration,
 		"username":             username,

@@ -75,7 +75,7 @@ func KeyringService(host string, idms int) string {
 	return fmt.Sprintf("%s/%d", host, idms)
 }
 
-func GetAWSSigninToken(accessKeyID string, secretAccessKey string, sessionToken string) (string, error) {
+func GetAWSSigninToken(awsEndpoint string, accessKeyID string, secretAccessKey string, sessionToken string) (string, error) {
 	session := map[string]string{
 		"sessionId":    accessKeyID,
 		"sessionKey":   secretAccessKey,
@@ -89,7 +89,7 @@ func GetAWSSigninToken(accessKeyID string, secretAccessKey string, sessionToken 
 	v := url.Values{}
 	v.Add("Action", "getSigninToken")
 	v.Add("Session", string(sessionJSON))
-	url := "https://signin.aws.amazon.com/federation?" + v.Encode()
+	url := fmt.Sprintf("https://signin.%s/federation?", awsEndpoint) + v.Encode()
 
 	resp, err := http.DefaultClient.Get(url)
 	if err != nil {
